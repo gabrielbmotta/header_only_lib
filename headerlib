@@ -1,12 +1,21 @@
+#!/bin/bash
+
 DIR=$1
 OUTFILE=$2
+
+GREP_FLAGS=""
+if [ "$(uname)" == "Darwin" ]; then
+    GREP_FLAGS="-Eo"
+elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+    GREP_FLAGS="-Po"
+fi
 
 if [ "${OUTFILE}" == "" ]; then
     OUTFILE="header_out.hpp"
 fi
 
-FILES=$(find ${DIR} -print | grep -Eo '.+(\.hpp|\.cpp|.h|.cc|.c)$')
-ALL_DEP=$(echo "${FILES}" | grep -Eo '[^\/]+\.\w+(\s+|$)' | sed 's/\./\\\./g')
+FILES=$(find ${DIR} -print | grep ${GREP_FLAGS} '.+(\.hpp|\.cpp|.h|.cc|.c)$')
+ALL_DEP=$(echo "${FILES}" | grep ${GREP_FLAGS} '[^\/]+\.\w+(\s+|$)' | sed 's/\./\\\./g')
 
 DONE=0
 PASS_NUM=0
@@ -14,21 +23,31 @@ PASS_NUM=0
 while [ ${DONE} == 0 ]; do
     echo "PASS ${PASS_NUM}"
 
-    FILE_NAMES=$(echo "${FILES}" | grep -Eo '[^\/]+\.\w+(\s+|$)') 
+    FILE_NAMES=$(echo "${FILES}" | grep ${GREP_FLAGS} '[^\/]+\.\w+(\s+|$)') 
     NEXT_FILES=""
 
     for FILE in ${FILES}; do
+
+        if [[ -d $FILE ]]; then
+            continue
+        fi
+
         echo "Checking ${FILE}"
         DEP=0
         for DEPENDENCY in ${FILE_NAMES}; do
             ESCAPED=$(echo ${DEPENDENCY} | sed 's/\./\\\./g')
-            if [ "$(grep -E "\#include (\<|\")${ESCAPED}(\>|\")" ${FILE})" != "" ]; then
+            if [ "$(grep ${GREP_FLAGS} "\#include (\<|\")${ESCAPED}(\>|\")" ${FILE})" != "" ]; then
                 echo "depends on ${DEPENDENCY}"
                 DEP=1
             fi
         done
         if [ ${DEP} == 0 ]; then
             echo "APPENDING FILE ${FILE}"
+            echo "" >> ${OUTFILE}
+            echo "//##################################################" >> ${OUTFILE}
+            echo "// Contents of ${FILE}" >> ${OUTFILE}
+            echo "//##################################################" >> ${OUTFILE}
+            echo "" >> ${OUTFILE}
             cat ${FILE} >> ${OUTFILE}
         else 
             NEXT_FILES="${NEXT_FILES} ${FILE}"
